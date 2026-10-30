@@ -11,7 +11,7 @@ using namespace std;
 
 struct Instruction {
     string command;
-    vector<string> args;
+    string arg;
 };
 
 struct Value {
@@ -19,41 +19,55 @@ struct Value {
     bool is_address;
 };
 
+typedef vector<Value> StackValues;
+
 class VMStack {
     Stack data;
-    vector<bool> flags;
+    Stack flags;
 
 public:
-    bool empty() const { return data.empty(); }
+    bool empty() const {
+        return data.empty();
+    }
 
     void push(int n, bool address = false) {
         data.push(n);
-        flags.insert(flags.begin(), address);
+        flags.push(address ? 1 : 0);
     }
 
     Value top() const {
         if (empty()) throw runtime_error("Stack is empty");
-        return { data.get(), flags[0] };
+
+        Stack flags_copy = flags;
+        return { data.get(), flags_copy.get() != 0 };
     }
 
     int pop_number() {
         Value v = top();
         if (v.is_address) throw runtime_error("Expected number");
+
         data.pop();
-        flags.erase(flags.begin());
+        flags.pop();
         return v.number;
     }
 
     int pop_address() {
         Value v = top();
         if (!v.is_address) throw runtime_error("Expected return address");
+
         data.pop();
-        flags.erase(flags.begin());
+        flags.pop();
         return v.number;
     }
 
     void swap_top() {
-        if (flags.size() < 2 || flags[0] || flags[1])
+        Stack flags_copy = flags;
+
+        if (flags_copy.empty()) throw runtime_error("Invalid swap");
+        if (flags_copy.get()) throw runtime_error("Invalid swap");
+        flags_copy.pop();
+
+        if (flags_copy.empty() || flags_copy.get())
             throw runtime_error("Invalid swap");
 
         int a = data.get(); data.pop();
@@ -62,13 +76,15 @@ public:
         data.push(b);
     }
 
-    vector<Value> values() const {
-        vector<Value> result;
-        Stack copy = data;
+    StackValues values() const {
+        StackValues result;
+        Stack data_copy = data;
+        Stack flags_copy = flags;
 
-        for (bool flag : flags) {
-            result.push_back({ copy.get(), flag });
-            copy.pop();
+        while (!data_copy.empty()) {
+            result.push_back({ data_copy.get(), flags_copy.get() != 0 });
+            data_copy.pop();
+            flags_copy.pop();
         }
 
         return result;
@@ -90,9 +106,8 @@ int main(int argc, char* argv[]) {
             Instruction ins;
 
             if (!(in >> ins.command)) continue;
+            in >> ins.arg;
 
-            string arg;
-            while (in >> arg) ins.args.push_back(arg);
             program.push_back(ins);
         }
 
@@ -106,9 +121,9 @@ int main(int argc, char* argv[]) {
             string c = ins.command;
 
             if (c == "bipush") {
-                if (ins.args.size() != 1)
+                if (ins.arg.empty())
                     throw runtime_error("bipush needs one number");
-                stack.push(stoi(ins.args[0]));
+                stack.push(stoi(ins.arg));
             }
             else if (c == "pop") stack.pop_number();
             else if (c == "swap") stack.swap_top();
@@ -130,7 +145,7 @@ int main(int argc, char* argv[]) {
             else if (c.size() == 8 && c.substr(0, 7) == "istore_")
                 vars[c[7] - '0'] = stack.pop_number();
             else if (c == "invokestatic") {
-                int target = stoi(ins.args.at(0));
+                int target = stoi(ins.arg);
                 if (target < 0 || target >= (int)program.size())
                     throw runtime_error("Invalid function address");
 
