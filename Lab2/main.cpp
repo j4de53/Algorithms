@@ -37,9 +37,7 @@ public:
 
     Value top() const {
         if (empty()) throw runtime_error("Stack is empty");
-
-        Stack flags_copy = flags;
-        return { data.get(), flags_copy.get() != 0 };
+        return { data.get(), flags.get() != 0 };
     }
 
     int pop_number() {
